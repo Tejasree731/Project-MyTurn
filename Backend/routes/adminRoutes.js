@@ -1,9 +1,11 @@
 const express = require("express");
 const router = express.Router();
 
-const tempAdmin = require("../middleware/tempAdmin");
+const authAdmin = require("../middleware/authMiddleware");
 
 const {
+  registerAdmin,
+  loginAdmin,
   createQueue,
   getAllQueues,
   getQueueById,
@@ -19,9 +21,10 @@ const {
   getDashboardStats
 } = require("../controllers/adminController");
 
-// TEMP ADMIN (no auth yet)
-router.use(tempAdmin);
+router.post("/register", registerAdmin);
+router.post("/login", loginAdmin);
 
+router.use(authAdmin);
 
 // 🔐 Profile
 router.get("/profile", getAdminProfile);

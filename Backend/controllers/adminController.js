@@ -1,5 +1,79 @@
 const Admin = require("../models/Admin");
 const Queue = require("../models/Queue");
+const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
+
+const registerAdmin = async (req, res) => {
+  try {
+    const { name, email, password, organizationName } = req.body;
+
+    // 1. Check if admin already exists
+    const existingAdmin = await Admin.findOne({ email });
+    if (existingAdmin) {
+      return res.status(400).json({ message: "Admin already exists" });
+    }
+
+    // 2. Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // 3. Create admin
+    const admin = new Admin({
+      name,
+      email,
+      password: hashedPassword,
+      organizationName
+    });
+
+    await admin.save();
+
+    res.status(201).json({
+      message: "Admin registered successfully"
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const loginAdmin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    // 1. Check admin exists
+    const admin = await Admin.findOne({ email });
+    if (!admin) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // 2. Compare password
+    const isMatch = await bcrypt.compare(password, admin.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
+
+    // 3. Generate token
+    const token = jwt.sign(
+      { id: admin._id },
+      process.env.JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    // 4. Send response
+    res.json({
+      message: "Login successful",
+      token,
+      admin: {
+        id: admin._id,
+        name: admin.name,
+        email: admin.email,
+        organizationName: admin.organizationName
+      }
+    });
+
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
 
 const createQueue = async (req, res) => {
   try {
@@ -200,6 +274,9 @@ const getDashboardStats = async (req, res) => {
 };
 
 module.exports = {
+    registerAdmin,
+    loginAdmin,
+
   // Profile
   getAdminProfile,
   updateAdminProfile,
