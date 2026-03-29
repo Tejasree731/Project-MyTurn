@@ -74,19 +74,21 @@ const loginAdmin = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 const createQueue = async (req, res) => {
   try {
-    const { name, maxSize } = req.body;
+    const { name, capacity, icon, color } = req.body;
 
-    // get organization from admin
     const admin = await Admin.findById(req.adminId);
 
     const queue = new Queue({
       name,
       organization: admin.organizationName,
-      maxSize,
-      createdBy: req.adminId
+      capacity,
+      icon,
+      color,
+      createdBy: req.adminId,
+      entries: [],
+      nextTicket: 1
     });
 
     await queue.save();
@@ -100,7 +102,6 @@ const createQueue = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 const getAllQueues = async (req, res) => {
   try {
     const queues = await Queue.find({ createdBy: req.adminId });
@@ -112,13 +113,29 @@ const getAllQueues = async (req, res) => {
 
 const updateQueue = async (req, res) => {
   try {
-    const queue = await Queue.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
+    const { name, capacity, status, icon, color } = req.body;
+
+    const queue = await Queue.findById(req.params.id);
+
+    if (!queue) {
+      return res.status(404).json({ message: "Queue not found" });
+    }
+
+    // 🔐 ownership check
+    if (!queue.createdBy.equals(req.adminId)) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+
+    queue.name = name || queue.name;
+    queue.capacity = capacity || queue.capacity;
+    queue.status = status || queue.status;
+    queue.icon = icon || queue.icon;
+    queue.color = color || queue.color;
+
+    await queue.save();
 
     res.json(queue);
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -126,14 +143,22 @@ const updateQueue = async (req, res) => {
 
 const deleteQueue = async (req, res) => {
   try {
-    await Queue.findByIdAndDelete(req.params.id);
+    const queue = await Queue.findById(req.params.id);
 
-    // also remove from admin
+    if (!queue) {
+      return res.status(404).json({ message: "Queue not found" });
+    }
+    if (!queue.createdBy.equals(req.adminId)) {
+  return res.status(403).json({ message: "Not authorized" });
+}
+    await queue.deleteOne();
+
     await Admin.findByIdAndUpdate(req.adminId, {
       $pull: { queues: req.params.id }
     });
 
     res.json({ message: "Queue deleted" });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -141,22 +166,56 @@ const deleteQueue = async (req, res) => {
 
 const getQueueUsers = async (req, res) => {
   try {
-    const queue = await Queue.findById(req.params.id).populate("users");
-    res.json(queue.users);
+    const queue = await Queue.findById(req.params.id);
+    if (!queue) {
+  return res.status(404).json({ message: "Queue not found" });
+}
+
+res.json(queue.entries);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
+const mongoose = require("mongoose");
+
 const removeUserFromQueue = async (req, res) => {
   try {
     const { id, userId } = req.params;
 
-    await Queue.findByIdAndUpdate(id, {
-      $pull: { users: userId }
-    });
+    // ✅ Validate IDs
+    if (
+      !mongoose.Types.ObjectId.isValid(id) ||
+      !mongoose.Types.ObjectId.isValid(userId)
+    ) {
+      return res.status(400).json({ message: "Invalid ID" });
+    }
+
+    // ✅ Find queue
+    const queue = await Queue.findById(id);
+
+    if (!queue) {
+      return res.status(404).json({ message: "Queue not found" });
+    }
+
+    // ✅ Check if user exists in queue
+    const exists = queue.entries.find(entry =>
+      entry.userId.equals(userId)
+    );
+
+    if (!exists) {
+      return res.status(404).json({ message: "User not in queue" });
+    }
+
+    // ✅ Remove user
+    queue.entries = queue.entries.filter(
+      entry => !entry.userId.equals(userId)
+    );
+
+    await queue.save();
 
     res.json({ message: "User removed from queue" });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -187,9 +246,7 @@ const updateAdminProfile = async (req, res) => {
 
 const getQueueById = async (req, res) => {
   try {
-    const queue = await Queue.findById(req.params.id)
-      .populate("users", "name email");
-
+    const queue = await Queue.findById(req.params.id);
     res.json(queue);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -200,6 +257,12 @@ const toggleQueueStatus = async (req, res) => {
   try {
     const queue = await Queue.findById(req.params.id);
 
+    if (!queue) {
+  return res.status(404).json({ message: "Queue not found" });
+}
+if (!queue.createdBy.equals(req.adminId)) {
+  return res.status(403).json({ message: "Not authorized" });
+}
     queue.status = queue.status === "open" ? "closed" : "open";
 
     await queue.save();
@@ -210,43 +273,61 @@ const toggleQueueStatus = async (req, res) => {
   }
 };
 
-const reorderQueue = async (req, res) => {
+// const reorderQueue = async (req, res) => {
+//   try {
+//     const { queueId, userId, direction } = req.body;
+
+//     const queue = await Queue.findById(queueId);
+
+//     const index = queue.users.indexOf(userId);
+
+//     if (index === -1) {
+//       return res.status(404).json({ message: "User not in queue" });
+//     }
+
+//     if (direction === "up" && index > 0) {
+//       [queue.users[index], queue.users[index - 1]] =
+//       [queue.users[index - 1], queue.users[index]];
+//     }
+
+//     if (direction === "down" && index < queue.users.length - 1) {
+//       [queue.users[index], queue.users[index + 1]] =
+//       [queue.users[index + 1], queue.users[index]];
+//     }
+
+//     await queue.save();
+
+//     res.json(queue.users);
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+const clearQueue = async (req, res) => {
   try {
-    const { queueId, userId, direction } = req.body;
+    const { id } = req.params;
+    // ✅ Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid queue ID" });
+    }
+    // ✅ Find queue
+    const queue = await Queue.findById(id);
 
-    const queue = await Queue.findById(queueId);
-
-    const index = queue.users.indexOf(userId);
-
-    if (index === -1) {
-      return res.status(404).json({ message: "User not in queue" });
+    if (!queue) {
+      return res.status(404).json({ message: "Queue not found" });
     }
 
-    if (direction === "up" && index > 0) {
-      [queue.users[index], queue.users[index - 1]] =
-      [queue.users[index - 1], queue.users[index]];
+    // ✅ (Optional but recommended) Check ownership
+    if (!queue.createdBy.equals(req.adminId)) {
+      return res.status(403).json({ message: "Not authorized" });
     }
 
-    if (direction === "down" && index < queue.users.length - 1) {
-      [queue.users[index], queue.users[index + 1]] =
-      [queue.users[index + 1], queue.users[index]];
-    }
+    // ✅ Clear entries
+    queue.entries = [];
 
     await queue.save();
 
-    res.json(queue.users);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
+    res.json({ message: "Queue cleared successfully" });
 
-const clearQueue = async (req, res) => {
-  try {
-    await Queue.findByIdAndUpdate(req.params.id, {
-      users: []
-    });
-
-    res.json({ message: "Queue cleared" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -261,7 +342,7 @@ const getDashboardStats = async (req, res) => {
     const activeQueues = queues.filter(q => q.status === "open").length;
 
     let totalUsers = 0;
-    queues.forEach(q => totalUsers += q.users.length);
+    queues.forEach(q => totalUsers +=q.entries.length);
 
     res.json({
       totalQueues,
@@ -293,7 +374,7 @@ module.exports = {
   // Users
   getQueueUsers,
   removeUserFromQueue,
-  reorderQueue,
+//   reorderQueue,
 
   // Dashboard
   getDashboardStats

@@ -1,8 +1,6 @@
 const express = require("express");
 const router = express.Router();
-
-const authAdmin = require("../middleware/authMiddleware");
-
+const { authAdmin } = require("../middleware/authMiddleware");
 const {
   registerAdmin,
   loginAdmin,
@@ -14,7 +12,7 @@ const {
   toggleQueueStatus,
   getQueueUsers,
   removeUserFromQueue,
-  reorderQueue,
+//   reorderQueue,
   clearQueue,
   getAdminProfile,
   updateAdminProfile,
@@ -44,7 +42,7 @@ router.delete("/queue/:id/clear", clearQueue);
 // 👥 Users
 router.get("/queue/:id/users", getQueueUsers);
 router.delete("/queue/:id/user/:userId", removeUserFromQueue);
-router.patch("/queue/reorder", reorderQueue);
+// router.patch("/queue/reorder", reorderQueue);
 
 
 // 📊 Dashboard

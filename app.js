@@ -13,13 +13,13 @@ app.get("/", (req, res) => {
   res.send("MyTurn API running");
 });
 
-const authRoutes = require("./routes/authRoutes");
+const authRoutes = require("./Backend/routes/authRoutes");
 app.use("/api/auth", authRoutes);
 
-const queueRoutes = require("./routes/queueRoutes");
+const queueRoutes = require("./Backend/routes/queueRoutes");
 app.use("/api/queues", queueRoutes);
 
-const adminRoutes = require("./routes/adminRoutes");
+const adminRoutes = require("./Backend/routes/adminRoutes");
 app.use("/api/admin", adminRoutes);
 
 const { protect, adminOnly } = require("./middleware/authMiddleware");

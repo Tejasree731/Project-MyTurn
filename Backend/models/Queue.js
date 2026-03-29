@@ -1,39 +1,71 @@
 const mongoose = require("mongoose");
 
+// 🔹 Queue Entry
+const queueEntrySchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+  username: {
+    type: String,
+    required: true
+  },
+  ticketNumber: {
+    type: Number,
+    required: true
+  },
+  joinedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+// 🔹 Main Queue
 const queueSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
 
   organization: {
     type: String,
-    required: true
+    required: true,
+    trim: true
+  },
+
+  icon: {
+    type: String
+  },
+
+  color: {
+    type: String
+  },
+
+  capacity: {
+    type: Number,
+    default: 50
+  },
+
+  nextTicket: {
+    type: Number,
+    default: 1
   },
 
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Admin",
+    ref: "Admin",   // ✅ IMPORTANT FIX
     required: true
-  },
-
-  users: [
-    {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
-    }
-  ],
-
-  maxSize: {
-    type: Number,
-    default: 50
   },
 
   status: {
     type: String,
     enum: ["open", "closed"],
     default: "open"
-  }
+  },
+
+  entries: [queueEntrySchema]
 
 }, { timestamps: true });
 
