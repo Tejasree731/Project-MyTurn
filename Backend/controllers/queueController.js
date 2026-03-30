@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const Queue = require("../models/Queue");
+const sendEmail = require("../services/emailService");
+const User = require("../models/User");
 
 exports.addDummyQueues = async (req, res) => {
   try {
@@ -97,11 +99,12 @@ exports.joinQueue = async (req, res) => {
 
     // Assign ticket
     const ticketNumber = queue.nextTicket;
-
+    console.log(req.user.email);
     // Add entry
     queue.entries.push({
       userId: req.user._id,
       username: req.user.username,
+      email: req.user.email,
       ticketNumber
     });
 
@@ -193,6 +196,64 @@ exports.leaveQueue = async (req, res) => {
     res.json({ message: "Left queue successfully" });
 
   } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.completeTurn = async (req, res) => {
+  try {
+    let { userId, queueId } = req.body;
+
+    if (
+      !mongoose.Types.ObjectId.isValid(userId) ||
+      !mongoose.Types.ObjectId.isValid(queueId)
+    ) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+
+    const queue = await Queue.findById(queueId);
+
+    if (!queue) {
+      return res.status(404).json({ message: "Queue not found" });
+    }
+
+    // 🔍 Find user
+    const index = queue.entries.findIndex(entry =>
+      entry.userId.toString() === userId.toString()
+    );
+
+    if (index === -1) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ❌ Remove user
+    queue.entries.splice(index, 1);
+
+    await queue.save();
+
+    // 🔔 Get next user
+    const nextUser = queue.entries[0];
+
+    if (nextUser) {
+      const user = await User.findById(nextUser.userId);
+
+      console.log("Fetched user:", user);
+
+      if (user && user.email) {
+        await sendEmail(
+          user.email,   // ✅ CORRECT
+          "Your Turn is Now!",
+          "Please proceed, it's your turn."
+        );
+      } else {
+        console.log("No email found for next user");
+      }
+    }
+
+    res.json({ message: "Turn completed" });
+
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Server error" });
   }
 };
