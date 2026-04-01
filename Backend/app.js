@@ -5,12 +5,19 @@ const cors = require("cors");
 const app = express();
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true, // This allows any origin that sends a request, which is safe for initial testing
+  credentials: true
+}));
 app.use(express.json());
 
-// Test route
+// Test and Health routes
 app.get("/", (req, res) => {
   res.send("MyTurn API running");
+});
+
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "ok", uptime: process.uptime() });
 });
 
 const authRoutes = require("./routes/authRoutes");
