@@ -5,10 +5,32 @@ const cors = require("cors");
 const app = express();
 
 // Middleware
+const allowedOrigins = [
+  'https://project-myturn-frontend.onrender.com',
+  'http://localhost:3000'
+];
+
 app.use(cors({
-  origin: true, // This allows any origin that sends a request, which is safe for initial testing
-  credentials: true
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      var msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+// Log requests to help debug
+app.use((req, res, next) => {
+  console.log(`${req.method} ${req.url} - Origin: ${req.headers.origin}`);
+  next();
+});
+
 app.use(express.json());
 
 // Test and Health routes
