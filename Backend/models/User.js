@@ -22,6 +22,14 @@ const userSchema = new mongoose.Schema({
     type: String,
     enum: ["admin", "user"],
     default: "user"
+  },
+  tokens: {
+    type: Number,
+    default: 0
+  },
+  maxTokens: {
+    type: Number,
+    default: 10
   }
 }, {
   timestamps: true
