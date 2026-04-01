@@ -1,3 +1,18 @@
+# Backend
 Backend/.env
 Backend/node_modules/
 Backend/dist/
+Backend/build_log.txt
+
+# Frontend
+Frontend/node_modules/
+Frontend/dist/
+Frontend/.env
+Frontend/vite.config.js.timestamp*
+
+# Common
+.env
+node_modules/
+dist/
+.DS_Store
+*.log

@@ -21,5 +21,8 @@
     "mongoose": "^9.3.3",
     "nodemailer": "^8.0.4",
     "razorpay": "^2.9.6"
+  },
+  "engines": {
+    "node": ">=22.16.0"
   }
 }
