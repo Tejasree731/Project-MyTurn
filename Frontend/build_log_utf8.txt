@@ -1,0 +1,79 @@
+﻿
+> myturn-frontend@1.0.0 build
+> vite build
+
+[36mvite v5.4.21 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 6 modules transformed.
+node.exe : [31mx[39m 
+Build failed in 2.73s
+At C:\Program 
+Files\nodejs\npm.ps1:29 
+char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo      
+        : NotSpecified: 
+(    [31mx[39m Build 
+fail    ed in 
+2.73s:String) [    ], 
+RemoteException
+    + 
+FullyQualifiedError    
+Id : NativeCommandErr   
+ or
+ 
+[31merror during build:
+[31m[vite:css] 
+[postcss] It looks like 
+you're trying to use 
+`tailwindcss` directly 
+as a PostCSS plugin. 
+The PostCSS plugin has 
+moved to a separate 
+package, so to continue 
+using Tailwind CSS with 
+PostCSS you'll need to 
+install 
+`@tailwindcss/postcss` 
+and update your PostCSS 
+configuration.[31m
+file: [36mC:/Users/teja
+s/OneDrive/Desktop/MyTur
+nFinal/Project-MyTurn/Fr
+ontend/src/index.css:und
+efined:NaN[31m
+    at at (C:\Users\teja
+s\OneDrive\Desktop\MyTur
+nFinal\Project-MyTurn\Fr
+ontend\node_modules\tail
+windcss\dist\lib.js:38:1
+643)
+    at 
+LazyResult.runOnRoot (C:
+\Users\tejas\OneDrive\De
+sktop\MyTurnFinal\Projec
+t-MyTurn\Frontend\node_m
+odules\postcss\lib\lazy-
+result.js:361:16)
+    at 
+LazyResult.runAsync (C:\
+Users\tejas\OneDrive\Des
+ktop\MyTurnFinal\Project
+-MyTurn\Frontend\node_mo
+dules\postcss\lib\lazy-r
+esult.js:290:26)
+    at LazyResult.async 
+(C:\Users\tejas\OneDrive
+\Desktop\MyTurnFinal\Pro
+ject-MyTurn\Frontend\nod
+e_modules\postcss\lib\la
+zy-result.js:192:30)
+    at LazyResult.then (
+C:\Users\tejas\OneDrive\
+Desktop\MyTurnFinal\Proj
+ect-MyTurn\Frontend\node
+_modules\postcss\lib\laz
+y-result.js:436:17)[39m
