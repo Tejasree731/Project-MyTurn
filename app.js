@@ -22,6 +22,9 @@ app.use("/api/queues", queueRoutes);
 const adminRoutes = require("./Backend/routes/adminRoutes");
 app.use("/api/admin", adminRoutes);
 
+const paymentRoutes = require("./Backend/routes/paymentRoutes");
+app.use("/api/payment", paymentRoutes);
+
 const { protect, adminOnly } = require("./middleware/authMiddleware");
 
 // Protected route
