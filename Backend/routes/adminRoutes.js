@@ -16,7 +16,8 @@ const {
   clearQueue,
   getAdminProfile,
   updateAdminProfile,
-  getDashboardStats
+  getDashboardStats,
+  broadcastMessage
 } = require("../controllers/adminController");
 
 router.post("/register", registerAdmin);
@@ -39,9 +40,10 @@ router.patch("/queue/:id/toggle", toggleQueueStatus);
 router.delete("/queue/:id/clear", clearQueue);
 
 
-// 👥 Users
+// 👥 Users & Communication
 router.get("/queue/:id/users", getQueueUsers);
 router.delete("/queue/:id/user/:userId", removeUserFromQueue);
+router.post("/queue/:id/broadcast", broadcastMessage);
 // router.patch("/queue/reorder", reorderQueue);
 
 
