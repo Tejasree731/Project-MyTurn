@@ -1,7 +1,9 @@
 const Admin = require("../models/Admin");
 const Queue = require("../models/Queue");
+const User = require("../models/User");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const sendEmail = require("../services/emailService");
 
 const registerAdmin = async (req, res) => {
   try {
@@ -354,6 +356,45 @@ const getDashboardStats = async (req, res) => {
   }
 };
 
+const broadcastMessage = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { message } = req.body;
+
+    if (!message || message.trim() === "") {
+        return res.status(400).json({ message: "Broadcast message is required" });
+    }
+
+    const queue = await Queue.findById(id);
+    if (!queue) return res.status(404).json({ message: "Queue not found" });
+
+    if (!queue.createdBy.equals(req.adminId)) {
+        return res.status(403).json({ message: "Not authorized to broadcast on this queue" });
+    }
+
+    // Get unique user IDs
+    const uniqueUserIds = [...new Set(queue.entries.map(e => e.userId.toString()))];
+    
+    // Find users to broadcast
+    const users = await User.find({ _id: { $in: uniqueUserIds } });
+
+    // Dispatched async without waiting for every single round-trip to complete
+    users.forEach(user => {
+        if (user.email) {
+            sendEmail(
+                user.email,
+                `Urgent Update: ${queue.name} Queue`,
+                message
+            ).catch(err => console.error("Email dispatch failed for", user.email));
+        }
+    });
+
+    res.json({ message: `Broadcast successfully dispatched to ${users.length} waiting users.` });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
 module.exports = {
     registerAdmin,
     loginAdmin,
@@ -374,8 +415,8 @@ module.exports = {
   // Users
   getQueueUsers,
   removeUserFromQueue,
-//   reorderQueue,
 
-  // Dashboard
-  getDashboardStats
+  // Dashboard & Utilities
+  getDashboardStats,
+  broadcastMessage
 };

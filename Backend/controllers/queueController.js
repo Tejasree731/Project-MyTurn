@@ -70,7 +70,7 @@ exports.getQueues = async (req, res) => {
 //join
 exports.joinQueue = async (req, res) => {
   try {
-    const { queueId } = req.body;
+    const { queueId } = req.params;
 
     const queue = await Queue.findById(queueId);
 
@@ -140,23 +140,35 @@ exports.getMyStatus = async (req, res) => {
       return res.status(404).json({ message: "Queue not found" });
     }
 
-    // ✅ 3. Find user in queue
-    const index = queue.entries.findIndex(entry =>
-      entry.userId.equals(req.user._id)
-    );
+    // ✅ 3. Find all user entries in queue
+    const userEntries = queue.entries
+      .map((entry, index) => ({ entry, position: index + 1, usersAhead: index }))
+      .filter(item => item.entry.userId.equals(req.user._id));
 
-    if (index === -1) {
+    if (userEntries.length === 0) {
       return res.status(404).json({ message: "You are not in this queue" });
     }
 
-    const myEntry = queue.entries[index];
+    const statuses = userEntries.map(item => ({
+      ticketNumber: item.entry.ticketNumber,
+      position: item.position,
+      usersAhead: item.usersAhead,
+      queueName: queue.name,
+      joinedAt: item.entry.joinedAt,
+      totalEntries: queue.entries.length,
+      status: queue.status,
+      username: item.entry.username
+    }));
+
+    // Mask the live queue for privacy before sending to frontend
+    const liveQueue = queue.entries.map((entry, index) => ({
+      position: index + 1,
+      ticketNumber: entry.ticketNumber,
+      isMe: entry.userId.equals(req.user._id)
+    }));
 
     // ✅ 4. Send response
-    res.json({
-      ticketNumber: myEntry.ticketNumber,
-      position: index + 1,
-      peopleAhead: index
-    });
+    res.json({ myTickets: statuses, liveQueue });
 
   } catch (error) {
     console.error(error); // optional for debugging
@@ -166,7 +178,7 @@ exports.getMyStatus = async (req, res) => {
 
 exports.leaveQueue = async (req, res) => {
   try {
-    const { queueId } = req.body;
+    const { queueId, ticketNumber } = req.body;
 
     // Validate ID
     if (!mongoose.Types.ObjectId.isValid(queueId)) {
@@ -179,19 +191,28 @@ exports.leaveQueue = async (req, res) => {
       return res.status(404).json({ message: "Queue not found" });
     }
 
-    // Find user index
-    const index = queue.entries.findIndex(entry =>
-      entry.userId.equals(req.user._id)
-    );
+    const initialLength = queue.entries.length;
 
-    if (index === -1) {
+    if (ticketNumber) {
+        // Individual Ticket Withdrawal
+        queue.entries = queue.entries.filter(entry => 
+            !(entry.userId.equals(req.user._id) && entry.ticketNumber === ticketNumber)
+        );
+    } else {
+        // Bulk Withdrawal (All Tickets)
+        queue.entries = queue.entries.filter(entry => !entry.userId.equals(req.user._id));
+    }
+
+    const removedCount = initialLength - queue.entries.length;
+
+    if (removedCount === 0) {
       return res.status(404).json({ message: "You are not in this queue" });
     }
 
-    // Remove user
-    queue.entries.splice(index, 1);
-
     await queue.save();
+
+    // Decrement user's token count by the amount removed
+    await User.findByIdAndUpdate(req.user._id, { $inc: { tokens: -removedCount } });
 
     res.json({ message: "Left queue successfully" });
 
@@ -227,9 +248,13 @@ exports.completeTurn = async (req, res) => {
     }
 
     // ❌ Remove user
+    const removedEntry = queue.entries[index];
     queue.entries.splice(index, 1);
 
     await queue.save();
+
+    // Decrement removed user's token count
+    await User.findByIdAndUpdate(removedEntry.userId, { $inc: { tokens: -1 } });
 
     // 🔔 Get next user
     const nextUser = queue.entries[0];
