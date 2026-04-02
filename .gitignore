@@ -1,6 +1,7 @@
 # Backend
 Backend/.env
 Backend/node_modules/
+Frontend/node_modules/
 Backend/dist/
 Backend/build_log.txt
 
