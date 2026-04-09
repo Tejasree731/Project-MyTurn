@@ -15,16 +15,24 @@ const adminSchema = new mongoose.Schema({
   },
   password: {
     type: String,
-    required: true
+    required: function() { return !this.googleId; } // Required only if not using Google OAuth
   },
   organizationName: {
     type: String,
     required: true
   },
+  googleId: {
+    type: String
+  },
   role: {
     type: String,
-    enum: ["superadmin", "admin"],
+    enum: ["superadmin", "admin", "staff"],
     default: "admin"
+  },
+  ownedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Admin",
+    default: null
   },
   queues: [
     {
