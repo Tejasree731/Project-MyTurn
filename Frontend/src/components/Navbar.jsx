@@ -1,13 +1,16 @@
 import React from 'react'
-import { Link, useLocation } from 'react-router-dom'
-import { LayoutDashboard, Users, User, LogOut, Menu, X, Coins } from 'lucide-react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { LayoutDashboard, Users, User, LogOut, Menu, X, Coins, Moon, Sun } from 'lucide-react'
 import { motion } from 'framer-motion'
+import { useTheme } from '../context/ThemeContext'
 import api from '../utils/api'
 
 const Navbar = () => {
   const [isOpen, setIsOpen] = React.useState(false)
   const [tokenInfo, setTokenInfo] = React.useState(null)
   const location = useLocation()
+  const navigate = useNavigate()
+  const { theme, toggleTheme } = useTheme()
 
   // Check if user is logged in
   const token = localStorage.getItem('token')
@@ -34,12 +37,33 @@ const Navbar = () => {
     { name: 'About', path: '/#about' },
   ]
 
+  const handleLogout = () => {
+    localStorage.removeItem('token')
+    localStorage.removeItem('role')
+    localStorage.removeItem('profile')
+    navigate('/auth')
+  }
+
   const authLinks = token ? (
     <>
-      <Link to="/dashboard" className="flex items-center gap-2 hover:text-primary transition-colors">
-        <LayoutDashboard size={18} />
-        <span>Dashboard</span>
-      </Link>
+      {role === 'admin' ? (
+        <Link to="/admin" className="flex items-center gap-2 hover:text-primary transition-colors">
+          <LayoutDashboard size={18} />
+          <span>Admin Panel</span>
+        </Link>
+      ) : (
+        <>
+          <Link to="/dashboard" className="flex items-center gap-2 hover:text-primary transition-colors">
+            <LayoutDashboard size={18} />
+            <span>Dashboard</span>
+          </Link>
+          <Link to="/profile" className="flex items-center gap-2 hover:text-primary transition-colors">
+            <User size={18} />
+            <span>Profile</span>
+          </Link>
+        </>
+      )}
+      
       {/* Token Badge */}
       {isUser && tokenInfo && (
         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-surface rounded-lg border border-glass-border">
@@ -52,6 +76,12 @@ const Navbar = () => {
           </span>
         </div>
       )}
+
+      {/* universal logout */}
+      <button onClick={handleLogout} className="flex items-center gap-2 text-red-400 hover:text-red-300 transition-colors ml-2">
+        <LogOut size={18} />
+        <span className="hidden md:inline">Logout</span>
+      </button>
     </>
   ) : (
     <>
@@ -80,13 +110,23 @@ const Navbar = () => {
             </Link>
           ))}
           <div className="h-6 w-[1px] bg-glass-border mx-2"></div>
+          
+          <button onClick={toggleTheme} className="p-2 bg-surface hover:bg-surface-hover rounded-full transition-colors order-last md:order-none">
+             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+
           {authLinks}
         </div>
 
-        {/* Mobile Toggle */}
-        <button className="md:hidden text-text" onClick={() => setIsOpen(!isOpen)}>
-          {isOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
+        {/* Mobile Toggle & Theme */}
+        <div className="md:hidden flex items-center gap-4">
+          <button onClick={toggleTheme} className="p-2 bg-surface rounded-full">
+             {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+          </button>
+          <button className="text-text" onClick={() => setIsOpen(!isOpen)}>
+            {isOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
+        </div>
       </div>
 
       {/* Mobile Menu */}
