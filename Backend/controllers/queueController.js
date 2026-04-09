@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const Queue = require("../models/Queue");
+const Broadcast = require("../models/Broadcast");
 const sendEmail = require("../services/emailService");
 const User = require("../models/User");
 
@@ -9,7 +10,6 @@ exports.addDummyQueues = async (req, res) => {
       {
         name: "Hospital OPD",
         organization: "City Hospital",
-        icon: "🏥",
         color: "hsl(200, 70%, 50%)",
         capacity: 50,
         nextTicket: 3,
@@ -31,7 +31,6 @@ exports.addDummyQueues = async (req, res) => {
       {
         name: "Bank Counter",
         organization: "SBI Bank",
-        icon: "🏦",
         color: "hsl(120, 60%, 45%)",
         capacity: 30,
         nextTicket: 2,
@@ -112,6 +111,9 @@ exports.joinQueue = async (req, res) => {
     queue.nextTicket += 1;
 
     await queue.save();
+
+    // 🌐 Real-time Update
+    req.app.get("io").to(queueId).emit("queueUpdated");
 
     res.json({
       message: "Joined queue successfully",
@@ -211,6 +213,9 @@ exports.leaveQueue = async (req, res) => {
 
     await queue.save();
 
+    // 🌐 Real-time Update
+    req.app.get("io").to(queueId).emit("queueUpdated");
+
     // Decrement user's token count by the amount removed
     await User.findByIdAndUpdate(req.user._id, { $inc: { tokens: -removedCount } });
 
@@ -253,6 +258,9 @@ exports.completeTurn = async (req, res) => {
 
     await queue.save();
 
+    // 🌐 Real-time Update
+    req.app.get("io").to(queueId).emit("queueUpdated");
+
     // Decrement removed user's token count
     await User.findByIdAndUpdate(removedEntry.userId, { $inc: { tokens: -1 } });
 
@@ -281,4 +289,42 @@ exports.completeTurn = async (req, res) => {
     console.error(err);
     res.status(500).json({ message: "Server error" });
   }
+};
+
+exports.getMyActiveQueues = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const queues = await Queue.find({ status: "open" });
+    
+    let activeQueues = [];
+    
+    queues.forEach(q => {
+      const entryIndex = q.entries.findIndex(e => e.userId.equals(userId));
+      if (entryIndex !== -1) {
+        const usersAhead = entryIndex;
+        activeQueues.push({
+          queueId: q._id,
+          queueName: q.name,
+          organization: q.organization,
+          ticketNumber: q.entries[entryIndex].ticketNumber,
+          usersAhead: usersAhead,
+          estimatedTimeMinutes: usersAhead * 5
+        });
+      }
+    });
+
+    res.json(activeQueues);
+  } catch (error) {
+    console.error("Error fetching active queues:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.getActiveBroadcasts = async (req, res) => {
+    try {
+        const broadcasts = await Broadcast.find({ active: true }).sort({ createdAt: -1 });
+        res.json(broadcasts);
+    } catch (err) {
+        res.status(500).json({ message: "Server error" });
+    }
 };

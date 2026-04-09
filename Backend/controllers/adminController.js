@@ -1,6 +1,8 @@
 const Admin = require("../models/Admin");
 const Queue = require("../models/Queue");
 const User = require("../models/User");
+const Broadcast = require("../models/Broadcast");
+const Payment = require("../models/Payment");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../services/emailService");
@@ -106,7 +108,10 @@ const createQueue = async (req, res) => {
 };
 const getAllQueues = async (req, res) => {
   try {
-    const queues = await Queue.find({ createdBy: req.adminId });
+    const admin = await Admin.findById(req.adminId);
+    // If staff, look for queues created by the owner
+    const ownerId = admin.role === 'staff' ? admin.ownedBy : admin._id;
+    const queues = await Queue.find({ createdBy: ownerId });
     res.json(queues);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -215,6 +220,9 @@ const removeUserFromQueue = async (req, res) => {
     );
 
     await queue.save();
+
+    // 🌐 Real-time Update
+    req.app.get("io").to(id).emit("queueUpdated");
 
     res.json({ message: "User removed from queue" });
 
@@ -328,6 +336,9 @@ const clearQueue = async (req, res) => {
 
     await queue.save();
 
+    // 🌐 Real-time Update
+    req.app.get("io").to(id).emit("queueUpdated");
+
     res.json({ message: "Queue cleared successfully" });
 
   } catch (err) {
@@ -337,19 +348,31 @@ const clearQueue = async (req, res) => {
 
 const getDashboardStats = async (req, res) => {
   try {
-    const queues = await Queue.find({ createdBy: req.adminId });
+    const admin = await Admin.findById(req.adminId);
+    const ownerId = admin.role === 'staff' ? admin.ownedBy : admin._id;
+    
+    const queues = await Queue.find({ createdBy: ownerId });
+    const queueIds = queues.map(q => q._id);
 
     const totalQueues = queues.length;
-
     const activeQueues = queues.filter(q => q.status === "open").length;
 
     let totalUsers = 0;
-    queues.forEach(q => totalUsers +=q.entries.length);
+    queues.forEach(q => totalUsers += q.entries.length);
+
+    // Calculate total revenue - Restricted to Lead Admins only
+    let totalRevenue = 0;
+    if (admin.role !== 'staff') {
+        const payments = await Payment.find({ queueId: { $in: queueIds }, status: "paid" });
+        totalRevenue = payments.reduce((sum, p) => sum + p.amount, 0) / 100;
+    }
 
     res.json({
       totalQueues,
       activeQueues,
-      totalUsers
+      totalUsers,
+      totalRevenue,
+      isStaff: admin.role === 'staff'
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -372,13 +395,9 @@ const broadcastMessage = async (req, res) => {
         return res.status(403).json({ message: "Not authorized to broadcast on this queue" });
     }
 
-    // Get unique user IDs
     const uniqueUserIds = [...new Set(queue.entries.map(e => e.userId.toString()))];
-    
-    // Find users to broadcast
     const users = await User.find({ _id: { $in: uniqueUserIds } });
 
-    // Dispatched async without waiting for every single round-trip to complete
     users.forEach(user => {
         if (user.email) {
             sendEmail(
@@ -390,6 +409,83 @@ const broadcastMessage = async (req, res) => {
     });
 
     res.json({ message: `Broadcast successfully dispatched to ${users.length} waiting users.` });
+    req.app.get("io").to(id).emit("broadcastMessage", { message });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const createGlobalBroadcast = async (req, res) => {
+    try {
+        const { message, type } = req.body;
+        const broadcast = new Broadcast({ message, type, active: true });
+        await broadcast.save();
+        req.app.get("io").emit("globalBroadcast", broadcast);
+        res.json({ message: "Global broadcast dispatched", broadcast });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+const getGlobalBroadcastsAdmin = async (req, res) => {
+    try {
+        const broadcasts = await Broadcast.find().sort({ createdAt: -1 });
+        res.json(broadcasts);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+const deactivateBroadcast = async (req, res) => {
+    try {
+        await Broadcast.findByIdAndUpdate(req.params.id, { active: false });
+        res.json({ message: "Broadcast deactivated" });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+};
+
+const addStaff = async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    const admin = await Admin.findById(req.adminId);
+    
+    if(admin.role === 'staff') return res.status(403).json({ message: "Staff cannot add other staff" });
+
+    const existing = await Admin.findOne({ email });
+    if(existing) return res.status(400).json({ message: "Email already in use" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const staff = new Admin({
+        name,
+        email,
+        password: hashedPassword,
+        organizationName: admin.organizationName,
+        role: 'staff',
+        ownedBy: admin._id
+    });
+
+    await staff.save();
+    res.status(201).json({ message: "Staff added successfully", staff: { id: staff._id, name: staff.name, email: staff.email } });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const getStaff = async (req, res) => {
+  try {
+    const staff = await Admin.find({ ownedBy: req.adminId }).select("-password");
+    res.json(staff);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+const removeStaff = async (req, res) => {
+  try {
+    const { id } = req.params;
+    await Admin.findOneAndDelete({ _id: id, ownedBy: req.adminId });
+    res.json({ message: "Staff member removed" });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -418,5 +514,13 @@ module.exports = {
 
   // Dashboard & Utilities
   getDashboardStats,
-  broadcastMessage
+  broadcastMessage,
+  createGlobalBroadcast,
+  getGlobalBroadcastsAdmin,
+  deactivateBroadcast,
+  
+  // Staff
+  addStaff,
+  getStaff,
+  removeStaff
 };
