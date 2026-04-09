@@ -1,6 +1,8 @@
 // app.js
 const express = require("express");
 const cors = require("cors");
+const passport = require("passport");
+require("./config/passport")(passport); // Initialize passport configuration
 
 const app = express();
 
@@ -32,6 +34,7 @@ app.use((req, res, next) => {
 });
 
 app.use(express.json());
+app.use(passport.initialize());
 
 // Test and Health routes
 app.get("/", (req, res) => {
