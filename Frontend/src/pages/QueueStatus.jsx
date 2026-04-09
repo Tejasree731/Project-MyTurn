@@ -1,8 +1,9 @@
 import React from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Users, Clock, ArrowLeft, LogOut, CheckCircle2, Ticket, TrendingDown, LayoutList, X } from 'lucide-react'
+import { Users, Clock, ArrowLeft, LogOut, CheckCircle2, Ticket, TrendingDown, LayoutList, X, Bell } from 'lucide-react'
 import api from '../utils/api'
+import socket from '../utils/socket'
 
 const QueueStatus = () => {
     const { id } = useParams()
@@ -11,18 +12,42 @@ const QueueStatus = () => {
     const [loading, setLoading] = React.useState(true)
     const [leaving, setLeaving] = React.useState(false)
     const [error, setError] = React.useState('')
+    const [broadcast, setBroadcast] = React.useState(null)
 
     React.useEffect(() => {
         fetchStatus()
-        // Polling for real-time live map updates
-        const interval = setInterval(fetchStatus, 3000)
-        return () => clearInterval(interval)
+        
+        // 🌐 Socket.io Connection
+        socket.connect()
+        socket.emit("joinQueueRoom", id)
+
+        socket.on("queueUpdated", () => {
+            console.log("Queue updated. Fetching fresh status...")
+            fetchStatus()
+        })
+
+        socket.on("broadcastMessage", (data) => {
+            setBroadcast(data.message)
+            // Auto hide after 10 seconds
+            setTimeout(() => setBroadcast(null), 10000)
+        })
+
+        socket.on("queueReset", () => {
+            alert("This queue has been reset for a new day.")
+            window.location.href = '/dashboard'
+        })
+
+        return () => {
+            socket.off("queueUpdated")
+            socket.off("broadcastMessage")
+            socket.off("queueReset")
+            socket.disconnect()
+        }
     }, [id])
 
     const fetchStatus = async () => {
         try {
             const { data } = await api.get(`/api/queues/${id}/status`)
-            // Expecting { myTickets: [], liveQueue: [] }
             setMyTickets(data.myTickets)
             setLiveQueue(data.liveQueue)
             setError('')
@@ -50,7 +75,6 @@ const QueueStatus = () => {
         if (!window.confirm(`Cancel Ticket #${ticketNumber}? This action cannot be undone.`)) return
         try {
             await api.post('/api/queues/leave', { queueId: id, ticketNumber })
-            // Re-fetch immediately to update UI without waiting for interval
             fetchStatus(); 
         } catch (err) {
             alert('Failed to cancel ticket')
@@ -58,17 +82,17 @@ const QueueStatus = () => {
     }
 
     if (loading) {
-        return <div className="container mx-auto px-6 py-20 text-center"><p className="text-xl">Loading your status...</p></div>
+        return <div className="container mx-auto px-6 py-20 text-center"><p className="text-xl text-primary animate-pulse">Syncing with live queue...</p></div>
     }
 
     if (error || !myTickets || myTickets.length === 0) {
         return (
             <div className="container mx-auto px-6 py-20 text-center">
                 <div className="glass-card max-w-lg mx-auto py-12">
-                   <Users size={48} className="mx-auto mb-6 text-danger opacity-50" />
-                   <h2 className="text-2xl font-bold mb-4">Not Found</h2>
-                   <p className="text-text-muted mb-8">{error || 'You have no active tickets in this queue.'}</p>
-                   <Link to="/dashboard" className="px-8 py-3 bg-primary text-white rounded-xl font-bold">
+                   <Users size={48} className="mx-auto mb-6 text-red-400 opacity-50" />
+                   <h2 className="text-2xl font-bold mb-4">Queue Not Found</h2>
+                   <p className="text-slate-400 mb-8">{error || 'You have no active tickets in this queue.'}</p>
+                   <Link to="/dashboard" className="px-8 py-3 bg-primary text-white rounded-xl font-bold hover:shadow-lg shadow-primary/20 transition-all">
                       Return to Dashboard
                    </Link>
                 </div>
@@ -76,14 +100,38 @@ const QueueStatus = () => {
         )
     }
 
-    // Sort to highlight the closest ticket as primary
     const sortedTickets = [...myTickets].sort((a, b) => a.position - b.position)
     const activeStatus = sortedTickets[0]
     const extraTickets = sortedTickets.slice(1)
 
     return (
-        <div className="container mx-auto px-4 sm:px-6 py-12 pt-16">
-            <Link to="/dashboard" className="inline-flex items-center gap-2 text-text-muted hover:text-text mb-8 transition-colors">
+        <div className="container mx-auto px-4 sm:px-6 py-12 pt-16 relative">
+            {/* 📢 Broadcast Alert */}
+            <AnimatePresence>
+                {broadcast && (
+                    <motion.div 
+                        initial={{ opacity: 0, y: -50 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -50 }}
+                        className="fixed top-20 left-1/2 -translate-x-1/2 z-[100] w-full max-w-lg px-6"
+                    >
+                        <div className="bg-primary/90 backdrop-blur-md border border-white/20 p-5 rounded-2xl shadow-2xl flex items-start gap-4">
+                            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center shrink-0">
+                                <Bell className="text-white animate-ring" size={20} />
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-xs font-black uppercase tracking-widest text-white/60 mb-1">Admin Broadcast</p>
+                                <p className="text-white font-medium leading-relaxed">{broadcast}</p>
+                            </div>
+                            <button onClick={() => setBroadcast(null)} className="text-white/50 hover:text-white p-1">
+                                <X size={18} />
+                            </button>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <Link to="/dashboard" className="inline-flex items-center gap-2 text-slate-400 hover:text-white mb-8 transition-colors">
                 <ArrowLeft size={20} /> Back to Dashboard
             </Link>
 
@@ -103,10 +151,8 @@ const QueueStatus = () => {
                         </h3>
                         
                         <div className="relative pb-2">
-                            {/* Horizontal Line connector */}
                             <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-white/5 -translate-y-1/2 z-0"></div>
                             
-                            {/* Scrollable Track */}
                             <div className="flex gap-3 overflow-x-auto pb-4 custom-scrollbar relative z-10 px-2 scroll-smooth">
                                 {liveQueue.map((item) => (
                                     <div 
@@ -140,7 +186,6 @@ const QueueStatus = () => {
                         animate={{ opacity: 1, scale: 1 }}
                         className="glass-card bg-primary/5 border-primary/20 overflow-hidden relative"
                     >
-                        {/* Cancel Primary Action */}
                         <button 
                             onClick={() => withdrawSingleTicket(activeStatus.ticketNumber)}
                             className="absolute top-4 right-4 z-10 p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg backdrop-blur-md transition-colors group"
@@ -161,18 +206,18 @@ const QueueStatus = () => {
                             <h2 className="text-7xl font-bold text-primary mb-8 tracking-tight font-mono">#{activeStatus.ticketNumber}</h2>
                             
                             <div className="flex justify-center gap-4">
-                                <div className="bg-background/80 p-4 rounded-xl border border-glass-border flex-1 shadow-md">
-                                    <p className="text-[10px] text-text-muted uppercase mb-1 font-bold">Position</p>
+                                <div className="bg-background/80 p-4 rounded-xl border border-white/5 flex-1 shadow-md">
+                                    <p className="text-[10px] text-slate-500 uppercase mb-1 font-bold">Position</p>
                                     <p className="text-2xl font-bold font-mono">#{activeStatus.position}</p>
                                 </div>
-                                <div className="bg-background/80 p-4 rounded-xl border border-glass-border flex-1 shadow-md">
-                                    <p className="text-[10px] text-text-muted uppercase mb-1 font-bold">Users Ahead</p>
+                                <div className="bg-background/80 p-4 rounded-xl border border-white/5 flex-1 shadow-md">
+                                    <p className="text-[10px] text-slate-500 uppercase mb-1 font-bold">Users Ahead</p>
                                     <p className="text-2xl font-bold font-mono">#{activeStatus.usersAhead}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="bg-background/60 border-t border-glass-border p-8 text-center backdrop-blur-xl">
+                        <div className="bg-background/60 border-t border-white/5 p-8 text-center backdrop-blur-xl">
                             {activeStatus.position === 1 ? (
                                 <div className="flex flex-col items-center gap-4 text-green-400">
                                     <CheckCircle2 size={48} className="animate-bounce drop-shadow-[0_0_15px_rgba(7ade80,0.5)]" />
@@ -183,7 +228,7 @@ const QueueStatus = () => {
                                 <div className="flex flex-col items-center gap-4">
                                     <TrendingDown size={32} className="text-cyan-400 animate-pulse" />
                                     <div className="text-lg font-bold">Estimated Time: <span className="text-cyan-400">~{activeStatus.usersAhead * 5} mins</span></div>
-                                    <p className="text-sm text-slate-400">Updating live. You can track your place via the feed above.</p>
+                                    <p className="text-sm text-slate-400">Updating live via Socket.io. You can track your place via the feed above.</p>
                                 </div>
                             )}
                         </div>
@@ -196,7 +241,7 @@ const QueueStatus = () => {
                     {/* Secondary Tickets */}
                     {extraTickets.length > 0 && (
                         <div className="glass-card">
-                            <div className="flex items-center justify-between border-b border-glass-border p-6 pb-4">
+                            <div className="flex items-center justify-between border-b border-white/5 p-6 pb-4">
                                 <h3 className="text-lg font-bold flex items-center gap-2">
                                     <LayoutList size={20} className="text-cyan-400"/> Additional Tickets
                                 </h3>
@@ -211,7 +256,7 @@ const QueueStatus = () => {
                                         initial={{ opacity: 0, height: 0 }}
                                         animate={{ opacity: 1, height: 'auto' }}
                                         exit={{ opacity: 0, scale: 0.95 }}
-                                        className="flex justify-between items-center bg-background/50 p-4 rounded-xl border border-glass-border group hover:border-white/10 transition-colors"
+                                        className="flex justify-between items-center bg-background/50 p-4 rounded-xl border border-white/5 group hover:border-white/10 transition-colors"
                                     >
                                         <div className="flex items-center gap-4">
                                             <div className="w-12 h-12 bg-surface rounded-xl flex items-center justify-center font-bold text-lg border border-white/5 shadow-inner">
@@ -242,7 +287,7 @@ const QueueStatus = () => {
                     )}
 
                     <div className="glass-card">
-                         <h3 className="text-xl font-bold p-6 pb-4 border-b border-glass-border">Queue Details</h3>
+                         <h3 className="text-xl font-bold p-6 pb-4 border-b border-white/5">Queue Details</h3>
                          <div className="p-6 space-y-4">
                             <div className="flex justify-between items-center py-2">
                                 <span className="text-slate-400 flex items-center gap-2 text-sm"><Users size={16}/> Queue Name</span>

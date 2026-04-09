@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, Users, Trash2, Monitor, Play, Pause, BarChart3, LogOut, Shield, TrendingUp, Clock, Activity, QrCode } from 'lucide-react'
+import { Plus, Users, Trash2, Monitor, Play, Pause, BarChart3, LogOut, Shield, TrendingUp, Clock, Activity, QrCode, Radio, Send, IndianRupee } from 'lucide-react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import api from '../utils/api'
@@ -9,11 +9,17 @@ import api from '../utils/api'
 const AdminDashboard = () => {
   const navigate = useNavigate()
   const [queues, setQueues] = React.useState([])
-  const [stats, setStats] = React.useState({ totalQueues: 0, activeQueues: 0, totalUsers: 0 })
+  const [stats, setStats] = React.useState({ totalQueues: 0, activeQueues: 0, totalUsers: 0, totalRevenue: 0 })
   const [loading, setLoading] = React.useState(true)
   const [showModal, setShowModal] = React.useState(false)
   const [newQueue, setNewQueue] = React.useState({ name: '', capacity: 50, icon: '🏢', color: '#6366f1' })
   const [activeTab, setActiveTab] = React.useState('open')
+  const [broadcastMsg, setBroadcastMsg] = React.useState('')
+  const [isBroadcasting, setIsBroadcasting] = React.useState(false)
+  const [staff, setStaff] = React.useState([])
+  const [showStaffModal, setShowStaffModal] = React.useState(false)
+  const [newStaff, setNewStaff] = React.useState({ name: '', email: '', password: '' })
+  const [isAddingStaff, setIsAddingStaff] = React.useState(false)
 
   const profileStr = localStorage.getItem('profile')
   const profile = profileStr && profileStr !== 'undefined' ? JSON.parse(profileStr) : {}
@@ -22,7 +28,17 @@ const AdminDashboard = () => {
     const token = localStorage.getItem('token')
     if (!token) { navigate('/auth'); return }
     fetchData()
+    fetchStaff()
   }, [])
+
+  const fetchStaff = async () => {
+    try {
+      const { data } = await api.get('/api/admin/staff')
+      setStaff(data)
+    } catch (err) {
+      console.error('Failed to fetch staff')
+    }
+  }
 
   const fetchData = async () => {
     try {
@@ -83,6 +99,47 @@ const AdminDashboard = () => {
     }
   }
 
+  const handleSendBroadcast = async (e) => {
+    e.preventDefault()
+    if(!broadcastMsg.trim()) return;
+    setIsBroadcasting(true)
+    try {
+      await api.post('/api/admin/broadcasts', { message: broadcastMsg, type: 'info' })
+      setBroadcastMsg('')
+      alert('Global broadcast dispatched successfully!')
+    } catch (err) {
+      alert('Failed to send broadcast')
+    } finally {
+      setIsBroadcasting(false)
+    }
+  }
+
+  const handleAddStaff = async (e) => {
+    e.preventDefault()
+    setIsAddingStaff(true)
+    try {
+      await api.post('/api/admin/staff', newStaff)
+      setNewStaff({ name: '', email: '', password: '' })
+      setShowStaffModal(false)
+      fetchStaff()
+      alert('Staff member added successfully!')
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to add staff')
+    } finally {
+      setIsAddingStaff(false)
+    }
+  }
+
+  const handleRemoveStaff = async (id) => {
+    if(!window.confirm('Remove this staff member?')) return
+    try {
+      await api.delete(`/api/admin/staff/${id}`)
+      fetchStaff()
+    } catch (err) {
+      alert('Failed to remove staff')
+    }
+  }
+
   const handleLogout = () => {
     localStorage.removeItem('token')
     localStorage.removeItem('role')
@@ -112,6 +169,14 @@ const AdminDashboard = () => {
             <a href="#queues" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white text-sm transition-colors">
               <Monitor size={18} /> Queue Management
             </a>
+            <a href="#broadcast" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white text-sm transition-colors">
+              <Radio size={18} /> Broadcast Engine
+            </a>
+            {!stats.isStaff && (
+              <a href="#staff" className="flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:bg-white/5 hover:text-white text-sm transition-colors">
+                <Users size={18} /> Staff Management
+              </a>
+            )}
           </nav>
         </div>
 
@@ -133,16 +198,6 @@ const AdminDashboard = () => {
 
       {/* Main Content */}
       <main className="flex-1 lg:ml-64">
-        {/* Mobile top bar */}
-        <div className="lg:hidden bg-surface/50 border-b border-white/5 sticky top-0 z-50 backdrop-blur-xl">
-          <div className="px-6 h-16 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-              <Shield className="text-primary" size={20} />
-              <span className="font-bold">Admin Panel</span>
-            </div>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-red-400"><LogOut size={18} /></button>
-          </div>
-        </div>
 
         <div className="p-6 lg:p-10">
           {/* Header */}
@@ -160,7 +215,7 @@ const AdminDashboard = () => {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
             <div className="bg-surface/40 border border-white/5 rounded-2xl p-6 flex items-center gap-5">
               <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
                 <BarChart3 className="text-primary" size={24} />
@@ -184,10 +239,21 @@ const AdminDashboard = () => {
                 <Users className="text-cyan-400" size={24} />
               </div>
               <div>
-                <p className="text-slate-500 text-sm font-medium">Users in Queues</p>
+                <p className="text-slate-500 text-sm font-medium">Users Waiting</p>
                 <p className="text-3xl font-black">{stats.totalUsers}</p>
               </div>
             </div>
+            {!stats.isStaff && (
+                <div className="bg-surface/40 border border-white/5 rounded-2xl p-6 flex items-center gap-5">
+                    <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center">
+                        <IndianRupee className="text-amber-400" size={24} />
+                    </div>
+                    <div>
+                        <p className="text-slate-500 text-sm font-medium">Total Revenue</p>
+                        <p className="text-3xl font-black">₹{stats.totalRevenue?.toLocaleString() || 0}</p>
+                    </div>
+                </div>
+            )}
           </div>
 
           {/* Analytics Chart */}
@@ -333,8 +399,135 @@ const AdminDashboard = () => {
               )}
             </div>
           )}
+
+          {/* Broadcast Engine Section */}
+          <div className="mt-16 mb-6" id="broadcast">
+            <h2 className="text-xl font-bold flex items-center gap-2 mb-6">
+              <Radio size={20} className="text-red-400" /> Global Broadcast Engine
+            </h2>
+            <div className="bg-surface/40 border border-white/5 rounded-3xl p-6 lg:p-8 shadow-xl">
+              <p className="text-sm text-slate-400 mb-6">Send an immediate, high-priority announcement to all active users waiting in any queue. Use this sparingly for critical operational updates.</p>
+              <form onSubmit={handleSendBroadcast} className="flex flex-col sm:flex-row gap-4">
+                <input 
+                  type="text" 
+                  placeholder="e.g. Due to system maintenance, all wait times are extended by 15 mins."
+                  value={broadcastMsg}
+                  onChange={e => setBroadcastMsg(e.target.value)}
+                  className="flex-1 px-4 py-3.5 bg-background border border-white/5 rounded-xl text-white placeholder-slate-500 focus:border-red-400/50 focus:outline-none transition-colors"
+                  required
+                />
+                <button 
+                  type="submit" 
+                  disabled={isBroadcasting}
+                  className="px-8 py-3.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 rounded-xl font-bold transition-all flex items-center justify-center gap-2"
+                >
+                  {isBroadcasting ? <Activity className="animate-spin" size={18} /> : <><Send size={18} /> Dispatch Global Alert</>}
+                </button>
+              </form>
+            </div>
+          </div>
+
+          {!stats.isStaff && (
+            <div className="mt-16 mb-6" id="staff">
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-xl font-bold flex items-center gap-2">
+                        <Users size={20} className="text-indigo-400" /> Organization Staff
+                    </h2>
+                    <button 
+                        onClick={() => setShowStaffModal(true)}
+                        className="px-4 py-2 bg-indigo-500/10 hover:bg-indigo-500 text-indigo-400 hover:text-white border border-indigo-500/20 rounded-xl text-xs font-bold transition-all flex items-center gap-2"
+                    >
+                        <Plus size={14} /> Add Staff Member
+                    </button>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {staff.length > 0 ? staff.map(member => (
+                        <div key={member._id} className="bg-surface/40 border border-white/5 rounded-2xl p-5 flex justify-between items-center group">
+                            <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 rounded-full bg-indigo-500/20 flex items-center justify-center text-indigo-400 font-bold text-sm">
+                                    {member.name[0].toUpperCase()}
+                                </div>
+                                <div className="overflow-hidden">
+                                    <p className="font-bold text-sm truncate">{member.name}</p>
+                                    <p className="text-xs text-slate-500 truncate">{member.email}</p>
+                                </div>
+                            </div>
+                            <button 
+                                onClick={() => handleRemoveStaff(member._id)}
+                                className="p-2 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all"
+                            >
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    )) : (
+                        <div className="col-span-full py-10 bg-surface/20 border border-dashed border-white/10 rounded-2xl text-center">
+                            <p className="text-slate-500 text-sm italic">No staff members added yet.</p>
+                        </div>
+                    )}
+                </div>
+            </div>
+          )}
+
         </div>
       </main>
+
+      {/* Staff Modal */}
+      {showStaffModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm">
+          <motion.div
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="w-full max-w-md bg-surface border border-white/10 rounded-2xl p-8 shadow-2xl"
+          >
+            <h2 className="text-2xl font-bold mb-6">Add Staff Member</h2>
+            <form onSubmit={handleAddStaff} className="space-y-5">
+              <div>
+                <label className="block text-sm text-slate-400 mb-2 font-medium">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. John Doe"
+                  value={newStaff.name}
+                  onChange={(e) => setNewStaff({...newStaff, name: e.target.value})}
+                  required
+                  className="w-full px-4 py-3 bg-background border border-white/5 rounded-xl text-white placeholder-slate-500 focus:border-indigo-500/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-2 font-medium">Email Address</label>
+                <input
+                  type="email"
+                  placeholder="staff@organization.com"
+                  value={newStaff.email}
+                  onChange={(e) => setNewStaff({...newStaff, email: e.target.value})}
+                  required
+                  className="w-full px-4 py-3 bg-background border border-white/5 rounded-xl text-white placeholder-slate-500 focus:border-indigo-500/50 focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-slate-400 mb-2 font-medium">Password</label>
+                <input
+                  type="password"
+                  placeholder="Min 6 characters"
+                  value={newStaff.password}
+                  onChange={(e) => setNewStaff({...newStaff, password: e.target.value})}
+                  required
+                  minLength={6}
+                  className="w-full px-4 py-3 bg-background border border-white/5 rounded-xl text-white focus:border-indigo-500/50 focus:outline-none"
+                />
+              </div>
+              <div className="flex gap-4 pt-2">
+                <button type="button" onClick={() => setShowStaffModal(false)} className="flex-1 py-3 bg-background hover:bg-white/5 rounded-xl font-bold border border-white/5 transition-colors">
+                  Cancel
+                </button>
+                <button type="submit" disabled={isAddingStaff} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
+                   {isAddingStaff ? <Activity className="animate-spin" size={18} /> : 'Create Staff User'}
+                </button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
 
       {/* Create Queue Modal */}
       {showModal && (

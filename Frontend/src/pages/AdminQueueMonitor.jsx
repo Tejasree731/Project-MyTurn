@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Users, Clock, Trash2, ArrowLeft, RefreshCw, CheckCircle2, XCircle, UserX, UserCheck, Play, Pause, Megaphone } from 'lucide-react'
 import api from '../utils/api'
+import socket from '../utils/socket'
 
 const AdminQueueMonitor = () => {
     const { id } = useParams()
@@ -17,8 +18,20 @@ const AdminQueueMonitor = () => {
 
     React.useEffect(() => {
         fetchQueueData()
-        const interval = setInterval(fetchQueueData, 5000) // Poll every 5s
-        return () => clearInterval(interval)
+        
+        // 🌐 Socket.io Connection
+        socket.connect()
+        socket.emit("joinQueueRoom", id)
+
+        socket.on("queueUpdated", () => {
+            console.log("Admin Monitor: Queue updated. Refreshing...")
+            fetchQueueData()
+        })
+
+        return () => {
+            socket.off("queueUpdated")
+            socket.disconnect()
+        }
     }, [id])
 
     const fetchQueueData = async () => {
@@ -41,7 +54,7 @@ const AdminQueueMonitor = () => {
         setActionLoading(userId)
         try {
             await api.delete(`/api/admin/queue/${id}/user/${userId}`)
-            fetchQueueData()
+            // Socket will trigger refresh for us
         } catch (err) {
             alert('Failed to remove user')
         } finally {
@@ -54,7 +67,7 @@ const AdminQueueMonitor = () => {
         setActionLoading('clear')
         try {
             await api.delete(`/api/admin/queue/${id}/clear`)
-            fetchQueueData()
+            // Socket will trigger refresh for us
         } catch (err) {
             alert('Failed to clear queue')
         } finally {
@@ -70,7 +83,7 @@ const AdminQueueMonitor = () => {
                 queueId: id,
                 userId: entries[0].userId
             })
-            fetchQueueData()
+            // Socket will trigger refresh for us
         } catch (err) {
             alert('Failed to process next turn')
         } finally {
@@ -102,7 +115,7 @@ const AdminQueueMonitor = () => {
         }
     }
 
-    if (loading) return <div className="container mx-auto px-6 py-20 text-center">Loading Monitor...</div>
+    if (loading) return <div className="container mx-auto px-6 py-20 text-center animate-pulse text-primary font-bold">Initializing Admin Monitor...</div>
 
     return (
         <div className="container mx-auto px-6 py-12 relative">
@@ -116,7 +129,7 @@ const AdminQueueMonitor = () => {
                         <h3 className="text-xl font-bold mb-2 flex items-center gap-2 text-cyan-400">
                             <Megaphone size={20} /> Announce Broadcast
                         </h3>
-                        <p className="text-sm text-slate-400 mb-6">Send an instant email notification to every user currently waiting in this queue.</p>
+                        <p className="text-sm text-slate-400 mb-6">Send an instant email and push notification to every user currently waiting in this queue.</p>
                         <textarea 
                             value={broadcastMsg}
                             onChange={(e) => setBroadcastMsg(e.target.value)}
@@ -128,7 +141,7 @@ const AdminQueueMonitor = () => {
                             <button 
                                 onClick={handleBroadcast} 
                                 disabled={sendingBroadcast || !broadcastMsg.trim()}
-                                className="flex-1 py-3 rounded-xl font-bold bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg disabled:opacity-50 transition-colors"
+                                className="flex-1 py-3 rounded-xl font-bold bg-primary hover:bg-primary/90 text-white shadow-lg disabled:opacity-50 transition-colors"
                             >
                                 {sendingBroadcast ? 'Sending...' : 'Send to All'}
                             </button>
@@ -139,16 +152,16 @@ const AdminQueueMonitor = () => {
 
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
                 <div>
-                    <Link to="/admin" className="flex items-center gap-2 text-text-muted hover:text-text mb-4 transition-colors">
+                    <Link to="/admin" className="flex items-center gap-2 text-slate-400 hover:text-white mb-4 transition-colors">
                         <ArrowLeft size={18} /> Back to Dashboard
                     </Link>
                     <div className="flex items-center gap-4">
-                        <div className="w-14 h-14 bg-surface rounded-2xl flex items-center justify-center text-3xl border border-glass-border">
+                        <div className="w-14 h-14 bg-surface rounded-2xl flex items-center justify-center text-3xl border border-white/5 shadow-inner">
                             {queue.icon || '🏢'}
                         </div>
                         <div>
                             <h1 className="text-3xl font-bold">{queue.name}</h1>
-                            <p className="text-text-muted text-sm capitalize">{queue.organization} | {queue.status} status</p>
+                            <p className="text-slate-400 text-sm capitalize">{queue.organization} | {queue.status} status</p>
                         </div>
                     </div>
                 </div>
@@ -156,14 +169,16 @@ const AdminQueueMonitor = () => {
                 <div className="flex flex-wrap gap-4">
                     <button 
                         onClick={() => setShowBroadcast(true)}
-                        className="px-6 py-3 bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-xl font-bold flex items-center gap-2 border border-indigo-500/20 transition-all"
+                        className="px-6 py-3 bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500 hover:text-white rounded-xl font-bold flex items-center gap-2 border border-cyan-500/20 transition-all shadow-lg shadow-cyan-500/5"
                     >
                         <Megaphone size={20} /> Broadcast
                     </button>
                     <button 
                         onClick={toggleStatus}
-                        className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border border-glass-border transition-all ${
-                            queue.status === 'open' ? 'bg-warning/10 text-warning hover:bg-warning' : 'bg-success/10 text-success hover:bg-success'
+                        className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 border transition-all ${
+                            queue.status === 'open' 
+                            ? 'bg-amber-500/10 text-amber-500 border-amber-500/20 hover:bg-amber-500' 
+                            : 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500'
                         } hover:text-white`}
                     >
                         {queue.status === 'open' ? <><Pause size={20} /> Close Queue</> : <><Play size={20} /> Open Queue</>}
@@ -171,7 +186,7 @@ const AdminQueueMonitor = () => {
                     <button 
                         onClick={clearQueue}
                         disabled={actionLoading === 'clear'}
-                        className="px-6 py-3 bg-danger text-white rounded-xl font-bold flex items-center gap-2 transition-all hover:bg-danger/80 disabled:opacity-50"
+                        className="px-6 py-3 bg-red-500/10 text-red-500 border border-red-500/20 rounded-xl font-bold flex items-center gap-2 transition-all hover:bg-red-500 hover:text-white disabled:opacity-50"
                     >
                         <Trash2 size={20} /> Clear All
                     </button>
@@ -184,12 +199,12 @@ const AdminQueueMonitor = () => {
                     <div className="glass-card">
                         <h3 className="text-xl font-bold mb-6">Queue Summary</h3>
                         <div className="grid grid-cols-2 gap-4">
-                            <div className="bg-background/50 p-4 rounded-xl border border-glass-border">
-                                <p className="text-xs text-text-muted uppercase mb-1">Users Waiting</p>
+                            <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                                <p className="text-xs text-slate-500 uppercase mb-1">Users Waiting</p>
                                 <p className="text-3xl font-bold">{entries.length}</p>
                             </div>
-                            <div className="bg-background/50 p-4 rounded-xl border border-glass-border">
-                                <p className="text-xs text-text-muted uppercase mb-1">Capacity</p>
+                            <div className="bg-background/50 p-4 rounded-xl border border-white/5">
+                                <p className="text-xs text-slate-500 uppercase mb-1">Capacity</p>
                                 <p className="text-3xl font-bold">{queue.capacity}</p>
                             </div>
                         </div>
@@ -197,21 +212,22 @@ const AdminQueueMonitor = () => {
 
                     <div className="glass-card bg-primary/5 border-primary/20">
                          <div className="flex items-center gap-4 mb-6">
-                             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+                             <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-primary border border-primary/20">
                                  <Users size={20} />
                              </div>
                              <h4 className="font-bold">Currently Serving</h4>
+                             <span className="ml-auto text-xs bg-cyan-400/10 text-cyan-400 px-2 py-1 rounded-full animate-pulse border border-cyan-400/20">Real-time</span>
                          </div>
                          {entries.length > 0 ? (
                              <div className="text-center py-6">
-                                 <p className="text-sm text-text-muted mb-2">Ticket #</p>
+                                 <p className="text-sm text-slate-500 mb-2">Ticket Number</p>
                                  <p className="text-6xl font-bold tracking-tight text-primary">#{entries[0].ticketNumber}</p>
-                                 <p className="mt-4 font-bold text-lg">{entries[0].username}</p>
+                                 <p className="mt-4 font-bold text-lg text-white">{entries[0].username}</p>
                                  
                                  <button 
                                      onClick={handleNextTurn}
                                      disabled={processingNext}
-                                     className="mt-6 w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold border border-white/5 shadow-[0_0_20px_rgba(99,102,241,0.3)] shadow-primary/20 flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
+                                     className="mt-6 w-full py-4 bg-primary hover:bg-primary/90 text-white rounded-xl font-bold border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.4)] flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-50"
                                  >
                                      {processingNext ? 'Processing...' : <><CheckCircle2 size={20} /> Mark as Complete</>}
                                  </button>
@@ -228,15 +244,15 @@ const AdminQueueMonitor = () => {
                 {/* Queue List */}
                 <div className="lg:col-span-2">
                     <div className="glass-card p-0 overflow-hidden">
-                        <div className="p-6 border-b border-glass-border flex justify-between items-center bg-surface/30">
-                            <h3 className="text-xl font-bold">Waitlist Monitor</h3>
-                            <button onClick={fetchQueueData} className="p-2 hover:bg-surface rounded-lg transition-colors">
-                                <RefreshCw size={18} className="text-text-muted" />
+                        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-surface/30">
+                            <h3 className="text-xl font-bold">Live Waitlist Monitor</h3>
+                            <button onClick={fetchQueueData} className="p-2 hover:bg-background rounded-lg transition-colors group">
+                                <RefreshCw size={18} className="text-slate-500 group-hover:rotate-180 transition-transform duration-500" />
                             </button>
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
-                                <thead className="bg-background/50 text-[10px] uppercase font-bold text-text-muted">
+                                <thead className="bg-background/50 text-[10px] uppercase font-bold text-slate-500">
                                     <tr>
                                         <th className="px-6 py-4">Position</th>
                                         <th className="px-6 py-4">Ticket</th>
@@ -245,29 +261,29 @@ const AdminQueueMonitor = () => {
                                         <th className="px-6 py-4 text-right">Actions</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-glass-border">
+                                <tbody className="divide-y divide-white/5">
                                     {entries.length > 0 ? entries.map((entry, index) => (
                                         <motion.tr 
-                                            key={entry.userId}
+                                            key={entry._id || entry.userId}
                                             initial={{ opacity: 0, x: -10 }}
                                             animate={{ opacity: 1, x: 0 }}
                                             transition={{ delay: index * 0.05 }}
-                                            className="hover:bg-surface/50 transition-colors"
+                                            className="hover:bg-white/5 transition-colors"
                                         >
                                             <td className="px-6 py-5">
-                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${index === 0 ? 'bg-primary text-white' : 'bg-surface border border-glass-border'}`}>
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${index === 0 ? 'bg-primary text-white shadow-lg shadow-primary/20' : 'bg-surface border border-white/5 text-slate-400'}`}>
                                                     {index + 1}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-5 font-bold">#{entry.ticketNumber}</td>
-                                            <td className="px-6 py-5 font-semibold">{entry.username}</td>
-                                            <td className="px-6 py-5 text-text-muted text-sm">{new Date(entry.joinedAt).toLocaleTimeString()}</td>
+                                            <td className="px-6 py-5 font-bold text-white">#{entry.ticketNumber}</td>
+                                            <td className="px-6 py-5 font-semibold text-slate-200">{entry.username}</td>
+                                            <td className="px-6 py-5 text-slate-400 text-sm">{new Date(entry.joinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
                                             <td className="px-6 py-5 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button 
                                                         onClick={() => removeUser(entry.userId)}
                                                         disabled={actionLoading === entry.userId}
-                                                        className="p-2 text-danger bg-danger/10 hover:bg-danger hover:text-white rounded-lg transition-all"
+                                                        className="p-2 text-red-400 bg-red-400/10 hover:bg-red-500 hover:text-white rounded-lg transition-all"
                                                         title="Remove from queue"
                                                     >
                                                         <UserX size={18} />
@@ -277,7 +293,8 @@ const AdminQueueMonitor = () => {
                                         </motion.tr>
                                     )) : (
                                         <tr>
-                                            <td colSpan="5" className="px-6 py-20 text-center text-text-muted opacity-50 font-medium">
+                                            <td colSpan="5" className="px-6 py-24 text-center text-slate-500 opacity-50 font-medium">
+                                                <Users size={40} className="mx-auto mb-4" />
                                                 No people in the queue right now.
                                             </td>
                                         </tr>
