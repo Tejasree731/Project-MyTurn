@@ -1,7 +1,7 @@
 import React from 'react'
 import { Link, useSearchParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Mail, Lock, User, ShieldCheck, ArrowRight, Github, Chrome } from 'lucide-react'
+import { Mail, Lock, User, ShieldCheck, ArrowRight, Github, Chrome, XCircle } from 'lucide-react'
 import api from '../utils/api'
 
 const Auth = () => {

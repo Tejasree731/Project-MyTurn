@@ -53,11 +53,9 @@ router.get(
       role: req.user.role
     };
 
-    // Redirect to frontend with token and user data (simplified)
+    // Redirect to frontend with token and user data
     const userData = encodeURIComponent(JSON.stringify(user));
-    const frontendUrl = process.env.NODE_ENV === "production" 
-      ? "https://project-myturn-frontend.onrender.com" 
-      : "http://localhost:3000";
+    const frontendUrl = process.env.FRONTEND_URL || "http://localhost:3000";
       
     res.redirect(`${frontendUrl}/auth?token=${token}&user=${userData}`);
   }
