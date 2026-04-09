@@ -9,6 +9,9 @@ const app = express();
 // Middleware
 const allowedOrigins = [
   process.env.FRONTEND_URL,
+  // Production (Render)
+  'https://project-myturn-frontend.onrender.com',
+  // Local Development
   'http://localhost:5173',
   'http://localhost:3000',
   'http://localhost:5000'
