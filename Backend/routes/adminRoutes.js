@@ -17,7 +17,13 @@ const {
   getAdminProfile,
   updateAdminProfile,
   getDashboardStats,
-  broadcastMessage
+  broadcastMessage,
+  createGlobalBroadcast,
+  getGlobalBroadcastsAdmin,
+  deactivateBroadcast,
+  addStaff,
+  getStaff,
+  removeStaff
 } = require("../controllers/adminController");
 
 router.post("/register", registerAdmin);
@@ -49,5 +55,15 @@ router.post("/queue/:id/broadcast", broadcastMessage);
 
 // 📊 Dashboard
 router.get("/dashboard", getDashboardStats);
+
+// 📢 Broadcasts
+router.post("/broadcasts", createGlobalBroadcast);
+router.get("/broadcasts", getGlobalBroadcastsAdmin);
+router.patch("/broadcasts/:id/deactivate", deactivateBroadcast);
+
+// 👥 Staff Management
+router.get("/staff", getStaff);
+router.post("/staff", addStaff);
+router.delete("/staff/:id", removeStaff);
 
 module.exports = router;
