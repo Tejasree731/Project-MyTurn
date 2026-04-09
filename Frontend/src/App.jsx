@@ -8,11 +8,14 @@ import AdminDashboard from './pages/AdminDashboard'
 import QueueStatus from './pages/QueueStatus'
 import AdminQueueMonitor from './pages/AdminQueueMonitor'
 import Profile from './pages/Profile'
+import Chatbot from './components/Chatbot'
 // import { AuthProvider, useAuth } from './context/AuthContext'
+import { ThemeProvider } from './context/ThemeContext'
 
 function App() {
   return (
-    <Router>
+    <ThemeProvider>
+      <Router>
       <div className="min-h-screen">
         <Routes>
           <Route path="/" element={<Landing />} />
@@ -24,8 +27,10 @@ function App() {
           <Route path="/profile" element={<><Navbar /><Profile /></>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
+        <Chatbot />
       </div>
     </Router>
+    </ThemeProvider>
   )
 }
 
