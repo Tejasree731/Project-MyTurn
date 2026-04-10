@@ -43,9 +43,16 @@ const Auth = () => {
   }
 
   const handleGoogleLogin = () => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+    const apiUrl = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '';
     const role = isAdmin ? 'admin' : 'user';
-    window.location.href = `${apiUrl}/api/auth/google?role=${role}`;
+    
+    // If we're on a separate port/domain, we need the full URL
+    // If apiUrl is empty, it assumes relative path (handled by proxy in dev)
+    const targetUrl = apiUrl 
+      ? `${apiUrl}/api/auth/google?role=${role}`
+      : `/api/auth/google?role=${role}`;
+      
+    window.location.href = targetUrl;
   }
 
   const handleSubmit = async (e) => {
